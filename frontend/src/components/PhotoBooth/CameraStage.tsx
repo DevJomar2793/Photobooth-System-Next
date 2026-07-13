@@ -1,9 +1,10 @@
 /* eslint-disable @next/next/no-img-element */
 "use client";
 
-import React, { useEffect, useRef, useState, useCallback } from "react";
+import { useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Template, CapturedShot } from "@/types/booth";
+import { useCamera } from "@/hooks/useCamera";
 
 interface Props {
   template: Template;
@@ -12,50 +13,12 @@ interface Props {
 }
 
 export function CameraStage({ template, onComplete, onCancel }: Props) {
-  const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  
-  const [stream, setStream] = useState<MediaStream | null>(null);
-  const [facingMode, setFacingMode] = useState<"user" | "environment">("user");
-  const [hasMultipleCams, setHasMultipleCams] = useState(false);
+  const { error, facingMode, hasMultipleCameras, switchCamera, videoRef } = useCamera();
   const [capturedShots, setCapturedShots] = useState<CapturedShot[]>([]);
   const [countdown, setCountdown] = useState<number>(0);
   const [isFlashing, setIsFlashing] = useState(false);
   const [timerSec, setTimerSec] = useState<number>(3);
-
-  const startCamera = useCallback(async (mode = facingMode) => {
-    setFacingMode(mode);
-    if (stream) {
-      stream.getTracks().forEach((track) => track.stop());
-    }
-    try {
-      const newStream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: mode, width: { ideal: 1920 }, height: { ideal: 1080 } },
-        audio: false,
-      });
-      setStream(newStream);
-      if (videoRef.current) {
-        videoRef.current.srcObject = newStream;
-      }
-      const devices = await navigator.mediaDevices.enumerateDevices();
-      setHasMultipleCams(devices.filter((d) => d.kind === "videoinput").length > 1);
-    } catch (err) {
-      console.error("Camera access denied or unavailable", err);
-    }
-  }, [stream, facingMode]);
-
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    startCamera();
-    return () => {
-      if (stream) stream.getTracks().forEach((t) => t.stop());
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const switchCamera = () => {
-    startCamera(facingMode === "user" ? "environment" : "user");
-  };
 
   const takePhoto = () => {
     if (!videoRef.current || !canvasRef.current) return;
@@ -134,6 +97,12 @@ export function CameraStage({ template, onComplete, onCancel }: Props) {
         />
         <canvas ref={canvasRef} className="hidden" />
 
+        {error && (
+          <p role="alert" className="z-10 max-w-md rounded-xl bg-black/70 p-4 text-center text-white">
+            {error}
+          </p>
+        )}
+
         <AnimatePresence>
           {countdown > 0 && (
             <motion.div 
@@ -174,7 +143,7 @@ export function CameraStage({ template, onComplete, onCancel }: Props) {
               </button>
             ))}
           </div>
-          {hasMultipleCams && (
+          {hasMultipleCameras && (
             <button onClick={switchCamera} className="p-3 rounded-full bg-white/10 hover:bg-white/20 transition-colors">
               <i className="bi bi-arrow-repeat text-xl"></i>
             </button>

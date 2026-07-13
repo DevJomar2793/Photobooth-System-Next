@@ -1,9 +1,10 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { Template, CapturedShot } from "@/types/booth";
 import { api } from "@/services/api";
+import { renderComposition } from "@/services/renderComposition";
 
 interface Props {
   template: Template;
@@ -12,127 +13,18 @@ interface Props {
   onFinish: () => void;
 }
 
-function drawPhotoInSlot(ctx: CanvasRenderingContext2D, img: HTMLImageElement, x: number, y: number, w: number, h: number) {
-  const baseScale = Math.max(w / img.width, h / img.height);
-  const drawWidth = img.width * baseScale * 1.08;
-  const drawHeight = img.height * baseScale * 1.08;
-  const centerX = x + w / 2;
-  const centerY = y + h / 2;
-  ctx.drawImage(img, centerX - drawWidth / 2, centerY - drawHeight / 2, drawWidth, drawHeight);
-}
-
-function loadImage(src: string): Promise<HTMLImageElement> {
-  return new Promise((res, rej) => {
-    const img = new Image();
-    img.onload = () => res(img);
-    img.onerror = rej;
-    img.src = src;
-  });
-}
-
-function drawRoundedRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number, fill: string) {
-  ctx.save();
-  clipRoundedRect(ctx, x, y, w, h, r);
-  ctx.fillStyle = fill;
-  ctx.shadowColor = "rgba(0,0,0,0.15)";
-  ctx.shadowBlur = 40;
-  ctx.shadowOffsetY = 20;
-  ctx.fillRect(x, y, w, h);
-  ctx.restore();
-}
-
-function clipRoundedRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.lineTo(x + w - r, y);
-  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
-  ctx.lineTo(x + w, y + h - r);
-  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
-  ctx.lineTo(x + r, y + h);
-  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
-  ctx.lineTo(x, y + r);
-  ctx.quadraticCurveTo(x, y, x + r, y);
-  ctx.closePath();
-  ctx.clip();
-}
-
 export function PreviewExport({ template, shots, onRetake, onFinish }: Props) {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadSuccess, setUploadSuccess] = useState(false);
 
-  // Move useEffect below to fix lint
-
-  const renderComposition = async () => {
-    if (shots.length === 0) return;
-
-    const canvas = document.createElement("canvas");
-    canvas.width = 1600;
-    canvas.height = 2200;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    // Background
-    const bg = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
-    if (template.id === "film-strip") {
-      bg.addColorStop(0, "#1f2229"); bg.addColorStop(1, "#12141a");
-    } else if (template.id === "grid") {
-      bg.addColorStop(0, "#fffdf8"); bg.addColorStop(1, "#f4efe7");
-    } else if (template.id === "collage") {
-      bg.addColorStop(0, "#fff6ed"); bg.addColorStop(1, "#ffe9df");
-    } else {
-      bg.addColorStop(0, "#edf7f3"); bg.addColorStop(1, "#dbece5");
-    }
-    ctx.fillStyle = bg;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    // Render Slots
-    for (const slot of template.slots) {
-      const shot = shots[slot.id - 1];
-      const slotX = (slot.x / 100) * canvas.width;
-      const slotY = (slot.y / 100) * canvas.height;
-      const slotW = (slot.w / 100) * canvas.width;
-      const slotH = (slot.h / 100) * canvas.height;
-      const radius = Math.min(slotW, slotH) * 0.08;
-
-      ctx.save();
-      ctx.translate(slotX + slotW / 2, slotY + slotH / 2);
-      ctx.rotate(((slot.rotate || 0) * Math.PI) / 180);
-      ctx.translate(-(slotX + slotW / 2), -(slotY + slotH / 2));
-
-      // Draw Frame
-      drawRoundedRect(ctx, slotX, slotY, slotW, slotH, radius, template.frame);
-      
-      ctx.save();
-      clipRoundedRect(ctx, slotX + 18, slotY + 18, slotW - 36, slotH - 36, Math.max(radius - 8, 16));
-
-      if (shot) {
-        const img = await loadImage(shot.dataUrl);
-        drawPhotoInSlot(ctx, img, slotX + 18, slotY + 18, slotW - 36, slotH - 36);
-      }
-
-      ctx.restore();
-      ctx.restore();
-    }
-
-    // Caption
-    const captionHeight = 180;
-    const captionY = canvas.height - captionHeight - 56;
-    drawRoundedRect(ctx, 64, captionY, canvas.width - 128, captionHeight, 56, template.captionBg);
-    ctx.fillStyle = template.captionColor;
-    ctx.font = '600 42px "Inter", sans-serif';
-    ctx.fillText(template.label, 112, captionY + 78);
-    ctx.font = '700 58px "Inter", sans-serif';
-    ctx.fillText("SnapCapture Booth", 112, captionY + 138);
-
-    setPreviewUrl(canvas.toDataURL("image/jpeg", 0.96));
-  };
-
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    renderComposition();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    let active = true;
+    void renderComposition(template, shots).then((url) => {
+      if (active) setPreviewUrl(url);
+    });
+    return () => { active = false; };
+  }, [shots, template]);
 
   const downloadImage = () => {
     if (!previewUrl) return;
