@@ -1,9 +1,8 @@
 import axios from "axios";
 
-// Under Next.js rewrites, we can just use relative URLs and it proxies to backend.
-const apiClient = axios.create({
-  baseURL: "https://atbackend-photobooth-system-next.onrender.com", // Uses current origin which will be rewritten
-});
+// Keep browser requests on the frontend origin. Next.js rewrites proxy API and
+// upload paths to the configured backend in both development and production.
+const apiClient = axios.create();
 
 export interface CapturedImage {
   id: number;

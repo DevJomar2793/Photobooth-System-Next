@@ -41,9 +41,9 @@ models.Base.metadata.create_all(bind=database.engine)
 # CORS – allow Vite dev server and any origin in dev
 
 origins = [
-    "https://photobooth-app-omega.vercel.app/",
+    "https://photobooth-app-omega.vercel.app",
+    "http://localhost:3000",
     "http://localhost:5173",
-
 ]
 
 app.add_middleware(
