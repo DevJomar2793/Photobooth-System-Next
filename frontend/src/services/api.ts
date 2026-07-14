@@ -1,8 +1,19 @@
 import axios from "axios";
 
-// Keep browser requests on the frontend origin. Next.js rewrites proxy API and
-// upload paths to the configured backend in both development and production.
-const apiClient = axios.create();
+const apiBaseUrl = (
+  process.env.NEXT_PUBLIC_API_URL ??
+  (process.env.NODE_ENV === "production"
+    ? "https://atbackend-photobooth-system-next.onrender.com"
+    : "")
+).replace(/\/$/, "");
+
+const apiClient = axios.create({
+  baseURL: apiBaseUrl || undefined,
+});
+
+function backendUrl(path: string) {
+  return `${apiBaseUrl}${path}`;
+}
 
 export interface CapturedImage {
   id: number;
@@ -49,11 +60,11 @@ export const api = {
 
   /** Download URL (link) */
   downloadUrl(id: number) {
-    return `/api/images/${id}/download`;
+    return backendUrl(`/api/images/${id}/download`);
   },
 
   /** Full URL for serving an image */
   imageUrl(filename: string) {
-    return `/uploads/images/${filename}`;
+    return backendUrl(`/uploads/images/${filename}`);
   },
 };
