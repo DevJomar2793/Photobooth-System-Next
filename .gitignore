@@ -29,5 +29,10 @@ venv/
 backend/images.db
 backend/uploads/
 
+# Environment files (may contain secrets)
+.env
+.env.*
+!.env.example
+
 # Mac OS
 .DS_Store
