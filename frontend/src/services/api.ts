@@ -1,8 +1,8 @@
-import axios from 'axios';
+import axios from "axios";
 
 // Under Next.js rewrites, we can just use relative URLs and it proxies to backend.
 const apiClient = axios.create({
-  baseURL: '', // Uses current origin which will be rewritten
+  baseURL: "https://atbackend-photobooth-system-next.onrender.com", // Uses current origin which will be rewritten
 });
 
 export interface CapturedImage {
@@ -18,23 +18,27 @@ export interface CapturedImage {
 
 export const api = {
   /** Upload a captured image blob */
-  async uploadImage(blob: Blob, user = 'Anonymous', originalName = 'capture') {
+  async uploadImage(blob: Blob, user = "Anonymous", originalName = "capture") {
     const formData = new FormData();
-    formData.append('file', blob, `${originalName}.jpg`);
-    formData.append('user', user);
-    formData.append('original_name', originalName);
-    
-    const { data } = await apiClient.post<CapturedImage>('/api/images/upload', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
+    formData.append("file", blob, `${originalName}.jpg`);
+    formData.append("user", user);
+    formData.append("original_name", originalName);
+
+    const { data } = await apiClient.post<CapturedImage>(
+      "/api/images/upload",
+      formData,
+      {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
       },
-    });
+    );
     return data;
   },
 
   /** List all images */
   async listImages() {
-    const { data } = await apiClient.get<CapturedImage[]>('/api/images');
+    const { data } = await apiClient.get<CapturedImage[]>("/api/images");
     return data;
   },
 
