@@ -12,7 +12,7 @@ try:
 except Exception:
     pass
 
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://db_projects_fqbk_user:fSUhzFrdqOckOUFylHRFSBsGv6E6bdru@dpg-d7fiarnaqgkc739r2fbg-a.singapore-postgres.render.com/db_projects_fqbk")
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:Jomar27Jomar93@db.iiorwfxhrjzshdvfjuir.supabase.co:5432/postgres")
 
 if not DATABASE_URL:
     raise RuntimeError("DATABASE_URL is missing in environment variables")
