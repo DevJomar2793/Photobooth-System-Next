@@ -13,7 +13,11 @@ os.environ["UPLOAD_DIR"] = str(TEST_DIRECTORY / "uploads" / "images")
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from fastapi.testclient import TestClient  # noqa: E402
+from fastapi import UploadFile  # noqa: E402
 from main import app  # noqa: E402
+from repositories import images as image_repository  # noqa: E402
+from services import images as image_service  # noqa: E402
+import database  # noqa: E402
 
 client = TestClient(app)
 
@@ -49,6 +53,35 @@ def test_upload_get_download_and_delete_image():
     deleted = client.delete(f"/api/images/{image['id']}")
     assert deleted.status_code == 200
     assert client.get(f"/api/images/{image['id']}").status_code == 404
+
+
+def test_missing_image_returns_not_found():
+    assert client.get("/api/images/999").status_code == 404
+    assert client.delete("/api/images/999").status_code == 404
+    assert client.get("/api/images/999/download").status_code == 404
+
+
+def test_removes_file_when_database_save_fails(monkeypatch):
+    def fail_to_save(*_args):
+        raise RuntimeError("database is unavailable")
+
+    monkeypatch.setattr(image_repository, "add_image", fail_to_save)
+    upload = UploadFile(filename="capture.jpg", file=io.BytesIO(make_image()))
+    upload.headers = {"content-type": "image/jpeg"}
+    db = database.SessionLocal()
+    before = list((TEST_DIRECTORY / "uploads" / "images").iterdir())
+
+    try:
+        try:
+            image_service.create_image(db, upload, "Test User", "capture")
+        except RuntimeError:
+            pass
+        else:
+            raise AssertionError("Expected the database write to fail")
+    finally:
+        db.close()
+
+    assert list((TEST_DIRECTORY / "uploads" / "images").iterdir()) == before
 
 
 def test_rejects_non_image_uploads():
