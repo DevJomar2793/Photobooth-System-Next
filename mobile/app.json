@@ -1,0 +1,50 @@
+{
+  "expo": {
+    "name": "SnapCapture Booth",
+    "slug": "snapcapture-booth",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "scheme": "snapcapture",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.snapcapture.booth"
+    },
+    "android": {
+      "package": "com.snapcapture.booth",
+      "adaptiveIcon": {
+        "backgroundColor": "#0F1115",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": true
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow SnapCapture Booth to access your camera for photo sessions.",
+          "recordAudioAndroid": false,
+          "barcodeScannerEnabled": false
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Allow SnapCapture Booth to access your photos.",
+          "savePhotosPermission": "Allow SnapCapture Booth to save finished photos.",
+          "granularPermissions": [
+            "photo"
+          ]
+        }
+      ],
+      "expo-sharing",
+      "expo-font"
+    ]
+  }
+}
