@@ -7,7 +7,7 @@ UPLOAD_DIR = Path(os.getenv("UPLOAD_DIR", BASE_DIR / "uploads" / "images"))
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 DEFAULT_ALLOWED_ORIGINS = [
-    "https://photobooth-app-omega.vercel.app",
+    "https://photobooth-system-next.vercel.app",
     "http://localhost:3000",
     "http://localhost:5173",
 ]
