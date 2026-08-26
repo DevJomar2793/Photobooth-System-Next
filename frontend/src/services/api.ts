@@ -26,6 +26,15 @@ export interface CapturedImage {
   file_size: number;
 }
 
+export interface UploadImageResponse {
+  message: string;
+  image: CapturedImage;
+}
+
+export interface MessageResponse {
+  message: string;
+}
+
 export const api = {
   /** Upload a captured image blob */
   async uploadImage(blob: Blob, user = "Anonymous", originalName = "capture") {
@@ -34,7 +43,7 @@ export const api = {
     formData.append("user", user);
     formData.append("original_name", originalName);
 
-    const { data } = await apiClient.post<CapturedImage>(
+    const { data } = await apiClient.post<UploadImageResponse>(
       "/api/images/upload",
       formData,
       {
@@ -54,7 +63,7 @@ export const api = {
 
   /** Delete an image by ID */
   async deleteImage(id: number) {
-    const { data } = await apiClient.delete(`/api/images/${id}`);
+    const { data } = await apiClient.delete<MessageResponse>(`/api/images/${id}`);
     return data;
   },
 

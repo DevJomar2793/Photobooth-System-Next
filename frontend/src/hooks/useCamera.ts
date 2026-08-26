@@ -33,7 +33,9 @@ export function useCamera(initialFacingMode: FacingMode = "user") {
       });
 
       streamRef.current = stream;
-      if (videoRef.current) videoRef.current.srcObject = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+      }
 
       const devices = await navigator.mediaDevices.enumerateDevices();
       setHasMultipleCameras(
@@ -46,8 +48,14 @@ export function useCamera(initialFacingMode: FacingMode = "user") {
   }, [stopCamera]);
 
   useEffect(() => {
-    void startCamera(initialFacingMode);
-    return stopCamera;
+    const startDelay = window.setTimeout(() => {
+      void startCamera(initialFacingMode);
+    }, 0);
+
+    return () => {
+      window.clearTimeout(startDelay);
+      stopCamera();
+    };
   }, [initialFacingMode, startCamera, stopCamera]);
 
   const switchCamera = useCallback(() => {

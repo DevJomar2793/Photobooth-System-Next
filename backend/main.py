@@ -1,180 +1,97 @@
-"""
-main.py – FastAPI Image Capture Backend
-Routes:
-  POST   /api/images/upload       – Upload captured image
-  GET    /api/images               – List all images
-  GET    /api/images/{id}          – Get single image metadata
-  DELETE /api/images/{id}          – Delete image
-  GET    /api/images/{id}/download – Download image file
-  GET    /uploads/{filename}       – Static image serving
-"""
-import os
-import uuid
-import shutil
-from datetime import datetime
-from typing import Optional, List
+"""FastAPI routes for the SnapCapture image gallery."""
+from typing import Annotated
 
-from fastapi import FastAPI, File, UploadFile, Form, Depends, HTTPException
+from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, JSONResponse
 from sqlalchemy.orm import Session
-from PIL import Image as PILImage
 
-import models
 import database
+import models
+from config import ALLOWED_ORIGINS, UPLOAD_DIR
+from image_service import image_details, image_to_dict, save_upload
+from schemas import ImageResponse, MessageResponse, UploadImageResponse
 
-# ── Directories ────────────────────────────────────────────────────────────────
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-UPLOAD_DIR = os.path.join(BASE_DIR, "uploads", "images")
-os.makedirs(UPLOAD_DIR, exist_ok=True)
-
-# ── App Setup ──────────────────────────────────────────────────────────────────
 app = FastAPI(title="SnapCapture API", version="1.0.0", docs_url="/api/docs")
-
-# Create DB tables
 models.Base.metadata.create_all(bind=database.engine)
-
-# Delete DB tables
-# models.Base.metadata.drop_all(bind=database.engine)
-
-# CORS – allow Vite dev server and any origin in dev
-
-origins = [
-    "https://photobooth-app-omega.vercel.app",
-    "http://localhost:3000",
-    "http://localhost:5173",
-]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR.parent), name="uploads")
 
-# Static file serving for uploaded images
-app.mount("/uploads", StaticFiles(directory=os.path.join(BASE_DIR, "uploads")), name="uploads")
-
-
-# ── Helper ─────────────────────────────────────────────────────────────────────
-def image_to_dict(img: models.Image) -> dict:
-    return {
-        "id": img.id,
-        "filename": img.filename,
-        "original_name": img.original_name,
-        "user": img.user,
-        "file_size": round(img.file_size, 2),
-        "width": img.width,
-        "height": img.height,
-        "captured_at": img.captured_at.isoformat() if img.captured_at else None,
-        "url": f"/uploads/images/{img.filename}",
-    }
+DatabaseSession = Annotated[Session, Depends(database.get_db)]
 
 
-# ── Routes ─────────────────────────────────────────────────────────────────────
+def find_image(image_id: int, db: Session) -> models.Image:
+    image = db.query(models.Image).filter(models.Image.id == image_id).first()
+    if not image:
+        raise HTTPException(status_code=404, detail="Image not found")
+    return image
+
 
 @app.get("/")
 def root():
     return {"message": "SnapCapture API is running", "docs": "/api/docs"}
 
 
-@app.get("/api/images", response_model=List[dict])
-def list_images(db: Session = Depends(database.get_db)):
-    """Return all captured images sorted by newest first."""
+@app.get("/api/images", response_model=list[ImageResponse])
+def list_images(db: DatabaseSession):
     images = db.query(models.Image).order_by(models.Image.captured_at.desc()).all()
-    return [image_to_dict(img) for img in images]
+    return [image_to_dict(image) for image in images]
 
 
-@app.get("/api/images/{image_id}")
-def get_image(image_id: int, db: Session = Depends(database.get_db)):
-    img = db.query(models.Image).filter(models.Image.id == image_id).first()
-    if not img:
-        raise HTTPException(status_code=404, detail="Image not found")
-    return image_to_dict(img)
+@app.get("/api/images/{image_id}", response_model=ImageResponse)
+def get_image(image_id: int, db: DatabaseSession):
+    return image_to_dict(find_image(image_id, db))
 
 
-@app.post("/api/images/upload", status_code=201)
-async def upload_image(
-    file: UploadFile = File(...),
-    user: Optional[str] = Form(default="Anonymous"),
-    original_name: Optional[str] = Form(default="capture"),
-    db: Session = Depends(database.get_db),
+@app.post("/api/images/upload", status_code=201, response_model=UploadImageResponse)
+def upload_image(
+    file: Annotated[UploadFile, File()],
+    db: DatabaseSession,
+    user: Annotated[str | None, Form()] = "Anonymous",
+    original_name: Annotated[str | None, Form()] = "capture",
 ):
-    """Accept a JPEG/PNG image file and save it with metadata."""
-    # Validate content type
-    if file.content_type not in ("image/jpeg", "image/png", "image/webp"):
-        raise HTTPException(status_code=400, detail="Only JPEG, PNG, or WebP images are accepted.")
-
-    # Generate unique filename
-    ext = "jpg" if file.content_type == "image/jpeg" else ("webp" if file.content_type == "image/webp" else "png")
-    unique_name = f"{uuid.uuid4().hex}.{ext}"
-    file_path = os.path.join(UPLOAD_DIR, unique_name)
-
-    # Save file to disk
-    with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
-
-    # Get image dimensions and size
-    try:
-        with PILImage.open(file_path) as pil_img:
-            width, height = pil_img.size
-    except Exception:
-        width, height = 0, 0
-
-    file_size_kb = os.path.getsize(file_path) / 1024
-
-    # Save metadata to DB
-    db_image = models.Image(
-        filename=unique_name,
+    filename, path = save_upload(file)
+    width, height, file_size = image_details(path)
+    image = models.Image(
+        filename=filename,
         original_name=original_name or "capture",
         user=user or "Anonymous",
-        file_size=file_size_kb,
+        file_size=file_size,
         width=width,
         height=height,
     )
-    db.add(db_image)
+    db.add(image)
     db.commit()
-    db.refresh(db_image)
-
-    return {
-        "message": "Image uploaded successfully",
-        "image": image_to_dict(db_image),
-    }
+    db.refresh(image)
+    return {"message": "Image uploaded successfully", "image": image_to_dict(image)}
 
 
-@app.delete("/api/images/{image_id}")
-def delete_image(image_id: int, db: Session = Depends(database.get_db)):
-    """Delete image from DB and disk."""
-    img = db.query(models.Image).filter(models.Image.id == image_id).first()
-    if not img:
-        raise HTTPException(status_code=404, detail="Image not found")
-
-    # Delete file from disk
-    file_path = os.path.join(UPLOAD_DIR, img.filename)
-    if os.path.exists(file_path):
-        os.remove(file_path)
-
-    db.delete(img)
+@app.delete("/api/images/{image_id}", response_model=MessageResponse)
+def delete_image(image_id: int, db: DatabaseSession):
+    image = find_image(image_id, db)
+    path = UPLOAD_DIR / image.filename
+    if path.exists():
+        path.unlink()
+    db.delete(image)
     db.commit()
     return {"message": f"Image {image_id} deleted successfully"}
 
 
 @app.get("/api/images/{image_id}/download")
-def download_image(image_id: int, db: Session = Depends(database.get_db)):
-    """Return image file as a downloadable attachment."""
-    img = db.query(models.Image).filter(models.Image.id == image_id).first()
-    if not img:
-        raise HTTPException(status_code=404, detail="Image not found")
-
-    file_path = os.path.join(UPLOAD_DIR, img.filename)
-    if not os.path.exists(file_path):
+def download_image(image_id: int, db: DatabaseSession):
+    image = find_image(image_id, db)
+    path = UPLOAD_DIR / image.filename
+    if not path.exists():
         raise HTTPException(status_code=404, detail="Image file not found on disk")
-
-    return FileResponse(
-        path=file_path,
-        media_type="image/jpeg",
-        filename=f"snapcapture_{img.id}.jpg",
-        headers={"Content-Disposition": f'attachment; filename="snapcapture_{img.id}.jpg"'},
+    media_type = {".jpg": "image/jpeg", ".png": "image/png", ".webp": "image/webp"}.get(
+        path.suffix.lower(), "application/octet-stream"
     )
+    return FileResponse(path=path, media_type=media_type, filename=f"snapcapture_{image.id}{path.suffix}")

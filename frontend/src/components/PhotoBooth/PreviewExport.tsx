@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { Template, CapturedShot } from "@/types/booth";
 import { api } from "@/services/api";
@@ -17,6 +17,8 @@ export function PreviewExport({ template, shots, onRetake, onFinish }: Props) {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadSuccess, setUploadSuccess] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const finishTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -25,6 +27,10 @@ export function PreviewExport({ template, shots, onRetake, onFinish }: Props) {
     });
     return () => { active = false; };
   }, [shots, template]);
+
+  useEffect(() => () => {
+    if (finishTimerRef.current) window.clearTimeout(finishTimerRef.current);
+  }, []);
 
   const downloadImage = () => {
     if (!previewUrl) return;
@@ -41,15 +47,16 @@ export function PreviewExport({ template, shots, onRetake, onFinish }: Props) {
     }
     
     setIsUploading(true);
+    setUploadError(null);
     try {
       const res = await fetch(previewUrl);
       const blob = await res.blob();
       await api.uploadImage(blob, "WebUser", `snapcapture-${template.id}`);
       setUploadSuccess(true);
-      setTimeout(() => onFinish(), 1500);
-    } catch (err) {
-      console.error("Upload failed", err);
-      alert("Failed to upload image to gallery. You can still download it.");
+      finishTimerRef.current = window.setTimeout(onFinish, 1500);
+    } catch (error) {
+      console.error("Upload failed", error);
+      setUploadError("Could not save to the gallery. You can still download the image.");
     } finally {
       setIsUploading(false);
     }
@@ -90,6 +97,8 @@ export function PreviewExport({ template, shots, onRetake, onFinish }: Props) {
           >
             <i className="bi bi-download"></i> Download Locally
           </button>
+
+          {uploadError && <p role="alert" className="text-center text-sm text-red-300">{uploadError}</p>}
           
           <button 
             onClick={handleSaveAndFinish}

@@ -1,50 +1,19 @@
 "use client";
 
-import React, { useState } from "react";
+import React from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { TemplateSelector } from "@/components/PhotoBooth/TemplateSelector";
 import { CameraStage } from "@/components/PhotoBooth/CameraStage";
 import { PreviewExport } from "@/components/PhotoBooth/PreviewExport";
-import { Template, CapturedShot } from "@/types/booth";
-
-type Step = "SELECT_TEMPLATE" | "CAPTURE" | "REVIEW";
+import { useBoothFlow } from "@/hooks/useBoothFlow";
 
 export default function Home() {
-  const [step, setStep] = useState<Step>("SELECT_TEMPLATE");
-  const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
-  const [capturedShots, setCapturedShots] = useState<CapturedShot[]>([]);
-
-  const handleTemplateSelect = (template: Template) => {
-    setSelectedTemplate(template);
-    setStep("CAPTURE");
-  };
-
-  const handleCaptureComplete = (shots: CapturedShot[]) => {
-    setCapturedShots(shots);
-    setStep("REVIEW");
-  };
-
-  const handleCancelCapture = () => {
-    setSelectedTemplate(null);
-    setCapturedShots([]);
-    setStep("SELECT_TEMPLATE");
-  };
-
-  const handleRetake = () => {
-    setCapturedShots([]);
-    setStep("CAPTURE");
-  };
-
-  const handleFinish = () => {
-    setSelectedTemplate(null);
-    setCapturedShots([]);
-    setStep("SELECT_TEMPLATE");
-  };
+  const flow = useBoothFlow();
 
   return (
     <div className="w-full flex-grow flex flex-col">
       <AnimatePresence mode="wait">
-        {step === "SELECT_TEMPLATE" && (
+        {flow.step === "SELECT_TEMPLATE" && (
           <motion.div 
             key="select"
             initial={{ opacity: 0, x: -20 }}
@@ -52,11 +21,11 @@ export default function Home() {
             exit={{ opacity: 0, x: 20 }}
             className="w-full flex-grow flex flex-col"
           >
-            <TemplateSelector onSelect={handleTemplateSelect} />
+            <TemplateSelector onSelect={flow.selectTemplate} />
           </motion.div>
         )}
 
-        {step === "CAPTURE" && selectedTemplate && (
+        {flow.step === "CAPTURE" && flow.selectedTemplate && (
           <motion.div 
             key="capture"
             initial={{ opacity: 0, scale: 0.95 }}
@@ -65,14 +34,14 @@ export default function Home() {
             className="w-full flex-grow flex flex-col"
           >
             <CameraStage 
-              template={selectedTemplate} 
-              onComplete={handleCaptureComplete} 
-              onCancel={handleCancelCapture}
+              template={flow.selectedTemplate}
+              onComplete={flow.completeCapture}
+              onCancel={flow.returnToTemplateSelection}
             />
           </motion.div>
         )}
 
-        {step === "REVIEW" && selectedTemplate && (
+        {flow.step === "REVIEW" && flow.selectedTemplate && (
           <motion.div 
             key="review"
             initial={{ opacity: 0, y: 20 }}
@@ -81,10 +50,10 @@ export default function Home() {
             className="w-full flex-grow flex flex-col"
           >
             <PreviewExport 
-              template={selectedTemplate} 
-              shots={capturedShots} 
-              onRetake={handleRetake}
-              onFinish={handleFinish}
+              template={flow.selectedTemplate}
+              shots={flow.capturedShots}
+              onRetake={flow.retakePhotos}
+              onFinish={flow.returnToTemplateSelection}
             />
           </motion.div>
         )}

@@ -1,7 +1,7 @@
 /* eslint-disable @next/next/no-img-element */
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Template, CapturedShot } from "@/types/booth";
 import { useCamera } from "@/hooks/useCamera";
@@ -12,13 +12,26 @@ interface Props {
   onCancel: () => void;
 }
 
+const SHOT_COUNT = 4;
+
 export function CameraStage({ template, onComplete, onCancel }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const countdownTimerRef = useRef<number | null>(null);
+  const completionTimerRef = useRef<number | null>(null);
+  const flashTimerRef = useRef<number | null>(null);
   const { error, facingMode, hasMultipleCameras, switchCamera, videoRef } = useCamera();
   const [capturedShots, setCapturedShots] = useState<CapturedShot[]>([]);
   const [countdown, setCountdown] = useState<number>(0);
   const [isFlashing, setIsFlashing] = useState(false);
   const [timerSec, setTimerSec] = useState<number>(3);
+
+  useEffect(() => {
+    return () => {
+      if (countdownTimerRef.current) window.clearInterval(countdownTimerRef.current);
+      if (completionTimerRef.current) window.clearTimeout(completionTimerRef.current);
+      if (flashTimerRef.current) window.clearTimeout(flashTimerRef.current);
+    };
+  }, []);
 
   const takePhoto = () => {
     if (!videoRef.current || !canvasRef.current) return;
@@ -44,19 +57,19 @@ export function CameraStage({ template, onComplete, onCancel }: Props) {
     
     setCapturedShots((prev) => {
       const next = [...prev, newShot];
-      if (next.length === 4) {
-        setTimeout(() => onComplete(next), 800);
+      if (next.length === SHOT_COUNT) {
+        completionTimerRef.current = window.setTimeout(() => onComplete(next), 800);
       }
       return next;
     });
 
     // Flash effect
     setIsFlashing(true);
-    setTimeout(() => setIsFlashing(false), 800);
+    flashTimerRef.current = window.setTimeout(() => setIsFlashing(false), 800);
   };
 
   const triggerCapture = () => {
-    if (countdown > 0 || capturedShots.length >= 4) return;
+    if (countdown > 0 || capturedShots.length >= SHOT_COUNT) return;
     if (timerSec === 0) {
       takePhoto();
       return;
@@ -64,11 +77,12 @@ export function CameraStage({ template, onComplete, onCancel }: Props) {
     
     setCountdown(timerSec);
     let currentCount = timerSec;
-    const interval = setInterval(() => {
+    countdownTimerRef.current = window.setInterval(() => {
       currentCount -= 1;
       setCountdown(currentCount);
       if (currentCount <= 0) {
-        clearInterval(interval);
+        if (countdownTimerRef.current) window.clearInterval(countdownTimerRef.current);
+        countdownTimerRef.current = null;
         takePhoto();
       }
     }, 1000);
@@ -78,7 +92,7 @@ export function CameraStage({ template, onComplete, onCancel }: Props) {
     <div className="flex flex-col items-center w-full max-w-5xl mx-auto py-8 px-4 h-[calc(100vh-80px)]">
       <div className="w-full flex justify-between items-center mb-6">
         <div>
-          <h2 className="text-xl font-bold">Capture {capturedShots.length + 1} of 4</h2>
+          <h2 className="text-xl font-bold">Capture {Math.min(capturedShots.length + 1, SHOT_COUNT)} of {SHOT_COUNT}</h2>
           <p className="text-sm text-muted">Layout: {template.name}</p>
         </div>
         <button onClick={onCancel} className="px-4 py-2 rounded-lg bg-border hover:bg-secondary-hover transition-colors text-sm font-medium">
@@ -152,7 +166,7 @@ export function CameraStage({ template, onComplete, onCancel }: Props) {
 
         <button
           onClick={triggerCapture}
-          disabled={countdown > 0 || capturedShots.length >= 4}
+          disabled={countdown > 0 || capturedShots.length >= SHOT_COUNT}
           className="relative w-20 h-20 rounded-full border-4 border-white/30 flex items-center justify-center group disabled:opacity-50 transition-all hover:border-white/60"
         >
           <span className="absolute w-14 h-14 bg-white rounded-full group-hover:scale-95 transition-transform group-active:scale-90" />
@@ -160,7 +174,7 @@ export function CameraStage({ template, onComplete, onCancel }: Props) {
 
         {/* Mini Film strip preview */}
         <div className="flex gap-2">
-          {Array.from({ length: 4 }).map((_, i) => {
+          {Array.from({ length: SHOT_COUNT }).map((_, i) => {
             const shot = capturedShots[i];
             return (
               <div key={i} className={`w-12 h-16 rounded-md overflow-hidden border-2 transition-all ${shot ? 'border-accent' : 'border-border bg-black/50'} flex items-center justify-center`}>
