@@ -1,7 +1,7 @@
 import axios from "axios";
 
 const apiBaseUrl = (
-  process.env.NEXT_PUBLIC_API_URL ??
+  process.env.NEXT_PUBLIC_API_URL ||
   (process.env.NODE_ENV === "production"
     ? "https://atbackend-photobooth-system-next.onrender.com"
     : "")
@@ -63,7 +63,9 @@ export const api = {
 
   /** Delete an image by ID */
   async deleteImage(id: number) {
-    const { data } = await apiClient.delete<MessageResponse>(`/api/images/${id}`);
+    const { data } = await apiClient.delete<MessageResponse>(
+      `/api/images/${id}`,
+    );
     return data;
   },
 
